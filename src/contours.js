@@ -1,6 +1,6 @@
 import {extent, thresholdSturges, tickStep, range} from "d3-array";
 import {slice} from "./array.js";
-import ascending from "./ascending.js";
+import {ascending, descending} from "./ascending.js";
 import area from "./area.js";
 import constant from "./constant.js";
 import contains from "./contains.js";
@@ -33,6 +33,7 @@ export default function() {
 
   function contours(values) {
     var tz = threshold(values);
+    var is_threshold_min = tz[0] < tz.slice(-1)[0] ? true : false;
 
     // Convert number of thresholds into uniform thresholds.
     if (!Array.isArray(tz)) {
@@ -40,21 +41,22 @@ export default function() {
       tz = tickStep(start, stop, tz);
       tz = range(Math.floor(start / tz) * tz, Math.floor(stop / tz) * tz, tz);
     } else {
-      tz = tz.slice().sort(ascending);
+      const threshold_order = is_threshold_min ? ascending : descending;
+      tz = tz.slice().sort(threshold_order);
     }
 
     return tz.map(function(value) {
-      return contour(values, value);
+      return contour(values, value, is_threshold_min);
     });
   }
 
   // Accumulate, smooth contour rings, assign holes to exterior rings.
   // Based on https://github.com/mbostock/shapefile/blob/v0.6.2/shp/polygon.js
-  function contour(values, value) {
+  function contour(values, value, is_value_min) {
     var polygons = [],
         holes = [];
 
-    isorings(values, value, function(ring) {
+    isorings(values, value, is_value_min, function(ring) {
       smooth(ring, values, value);
       if (area(ring) > 0) polygons.push([ring]);
       else holes.push(ring);
@@ -78,17 +80,17 @@ export default function() {
 
   // Marching squares with isolines stitched into rings.
   // Based on https://github.com/topojson/topojson-client/blob/v3.0.0/src/stitch.js
-  function isorings(values, value, callback) {
+  function isorings(values, value, is_value_min, callback) {
     var fragmentByStart = new Array,
         fragmentByEnd = new Array,
         x, y, t0, t1, t2, t3;
 
     // Special case for the first row (y = -1, t2 = t3 = 0).
     x = y = -1;
-    t1 = values[0] >= value;
+    t1 = is_value_min ? values[0] >= value : values[0] <= value;
     cases[t1 << 1].forEach(stitch);
     while (++x < dx - 1) {
-      t0 = t1, t1 = values[x + 1] >= value;
+      t0 = t1, t1 = is_value_min ? values[x + 1] >= value : values[x + 1] <= value;
       cases[t0 | t1 << 1].forEach(stitch);
     }
     cases[t1 << 0].forEach(stitch);
@@ -96,12 +98,12 @@ export default function() {
     // General case for the intermediate rows.
     while (++y < dy - 1) {
       x = -1;
-      t1 = values[y * dx + dx] >= value;
-      t2 = values[y * dx] >= value;
+      t1 = is_value_min ? values[y * dx + dx] >= value : values[y * dx + dx] <= value;
+      t2 = is_value_min ? values[y * dx] >= value : values[y * dx] <= value;
       cases[t1 << 1 | t2 << 2].forEach(stitch);
       while (++x < dx - 1) {
-        t0 = t1, t1 = values[y * dx + dx + x + 1] >= value;
-        t3 = t2, t2 = values[y * dx + x + 1] >= value;
+        t0 = t1, t1 = is_value_min ? values[y * dx + dx + x + 1] >= value : values[y * dx + dx + x + 1] <= value;
+        t3 = t2, t2 = is_value_min ? values[y * dx + x + 1] >= value : values[y * dx + x + 1] <= value;
         cases[t0 | t1 << 1 | t2 << 2 | t3 << 3].forEach(stitch);
       }
       cases[t1 | t2 << 3].forEach(stitch);
@@ -109,10 +111,10 @@ export default function() {
 
     // Special case for the last row (y = dy - 1, t0 = t1 = 0).
     x = -1;
-    t2 = values[y * dx] >= value;
+    t2 = is_value_min ? values[y * dx] >= value : values[y * dx] <= value;
     cases[t2 << 2].forEach(stitch);
     while (++x < dx - 1) {
-      t3 = t2, t2 = values[y * dx + x + 1] >= value;
+      t3 = t2, t2 = is_value_min ? values[y * dx + x + 1] >= value : values[y * dx + x + 1] <= value;
       cases[t2 << 2 | t3 << 3].forEach(stitch);
     }
     cases[t2 << 3].forEach(stitch);
