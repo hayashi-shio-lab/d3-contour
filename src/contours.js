@@ -29,7 +29,8 @@ export default function() {
   var dx = 1,
       dy = 1,
       threshold = thresholdSturges,
-      smooth = smoothLinear;
+      smooth = smoothLinear,
+      nodataValue = undefined;
 
   function contours(values) {
     var tz = threshold(values);
@@ -87,10 +88,13 @@ export default function() {
 
     // Special case for the first row (y = -1, t2 = t3 = 0).
     x = y = -1;
-    t1 = is_value_min ? values[0] >= value : values[0] <= value;
+    t1 = (values[0] == nodataValue) ? false :
+          is_value_min ? values[0] >= value : values[0] <= value;
     cases[t1 << 1].forEach(stitch);
     while (++x < dx - 1) {
-      t0 = t1, t1 = is_value_min ? values[x + 1] >= value : values[x + 1] <= value;
+      t0 = t1;
+      t1 = (values[x + 1] == nodataValue) ? false : 
+            is_value_min ? values[x + 1] >= value : values[x + 1] <= value;
       cases[t0 | t1 << 1].forEach(stitch);
     }
     cases[t1 << 0].forEach(stitch);
@@ -98,12 +102,18 @@ export default function() {
     // General case for the intermediate rows.
     while (++y < dy - 1) {
       x = -1;
-      t1 = is_value_min ? values[y * dx + dx] >= value : values[y * dx + dx] <= value;
-      t2 = is_value_min ? values[y * dx] >= value : values[y * dx] <= value;
+      t1 = (values[y * dx + dx] == nodataValue) ? false : 
+            is_value_min ? values[y * dx + dx] >= value : values[y * dx + dx] <= value;
+      t2 = (values[y * dx] == nodataValue) ? false : 
+            is_value_min ? values[y * dx] >= value : values[y * dx] <= value;
       cases[t1 << 1 | t2 << 2].forEach(stitch);
       while (++x < dx - 1) {
-        t0 = t1, t1 = is_value_min ? values[y * dx + dx + x + 1] >= value : values[y * dx + dx + x + 1] <= value;
-        t3 = t2, t2 = is_value_min ? values[y * dx + x + 1] >= value : values[y * dx + x + 1] <= value;
+        t0 = t1;
+        t1 = (values[y * dx + dx + x + 1] == nodataValue) ? false : 
+              is_value_min ? values[y * dx + dx + x + 1] >= value : values[y * dx + dx + x + 1] <= value;
+        t3 = t2;
+        t2 = (values[y * dx + x + 1] == nodataValue) ? false : 
+              is_value_min ? values[y * dx + x + 1] >= value : values[y * dx + x + 1] <= value;
         cases[t0 | t1 << 1 | t2 << 2 | t3 << 3].forEach(stitch);
       }
       cases[t1 | t2 << 3].forEach(stitch);
@@ -111,10 +121,13 @@ export default function() {
 
     // Special case for the last row (y = dy - 1, t0 = t1 = 0).
     x = -1;
-    t2 = is_value_min ? values[y * dx] >= value : values[y * dx] <= value;
+    t2 = (values[y * dx] == nodataValue) ? false : 
+          is_value_min ? values[y * dx] >= value : values[y * dx] <= value;
     cases[t2 << 2].forEach(stitch);
     while (++x < dx - 1) {
-      t3 = t2, t2 = is_value_min ? values[y * dx + x + 1] >= value : values[y * dx + x + 1] <= value;
+      t3 = t2;
+      t2 = (values[y * dx + x + 1] == nodataValue) ? false :
+            is_value_min ? values[y * dx + x + 1] >= value : values[y * dx + x + 1] <= value;
       cases[t2 << 2 | t3 << 3].forEach(stitch);
     }
     cases[t2 << 3].forEach(stitch);
@@ -199,6 +212,10 @@ export default function() {
 
   contours.smooth = function(_) {
     return arguments.length ? (smooth = _ ? smoothLinear : noop, contours) : smooth === smoothLinear;
+  };
+
+  contours.nodataValue = function(_) {
+    return arguments.length ? (nodataValue = typeof _ === "number" ? _ : undefined, contours) : nodataValue; 
   };
 
   return contours;
